@@ -1,0 +1,63 @@
+declare @core_cnt int
+declare @numa_node int
+
+set @core_cnt = ( select a.[cpu_count] from [sys].[dm_os_sys_info] a )
+
+set @numa_node = ( select
+							max(a.[memory_node_id]) + 1
+				   from [sys].[dm_os_memory_clerks] a
+				   where a.[memory_node_id] < 64
+				 )
+
+-- IF LESS THAN 5 CORES, THEN DON'T BOTHER --
+
+if @core_cnt > 4
+begin
+
+	declare @max_dop int
+
+	-- 75% OF TOTAL CORES IN MACHINE
+	set @max_dop = @core_cnt * 0.75
+
+	print 'Current MaxDOP at 75% of Core Count = ' + cast(@max_dop as varchar(max))
+
+	-- IF MAXDOP IS GREATER THAN PER NUMA NODE CORE COUNT
+	if @max_dop > ( @core_cnt / @numa_node)
+	begin
+
+		set @max_dop = ( @core_cnt / @numa_node ) * 0.75
+
+		print 'Curent MaxDOP is greater than per numa node core count thus (Core Count / Numa Nodes) x .75 = ' + cast(@max_dop as varchar(max))
+
+	end
+
+	-- USE MOD TO MAKE MAXDOP AN EVEN NUMBER
+	set @max_dop = @max_dop - (@max_dop % 2)
+
+	print 'Make Max DOP even number = ' + cast(@max_dop as varchar(max))
+
+
+	-- CAP MAXDOP AT 8
+	if @max_dop > 8
+	begin
+
+		set @max_dop = 8
+
+		print 'Max DOP is greater than 8 so capping it at 8'
+
+	end
+
+	print ' '
+	print ' '
+	print 'Suggested MaxDOP = ' + cast(@max_dop as varchar(max))
+	print 'Core Count = ' + cast(@core_cnt as varchar(max))
+	print 'Numa Nodes = ' + cast(@numa_node as varchar(max))
+
+end
+else
+begin
+
+	print 'Suggested MaxDOP = 0 since you have less than 4 cores in total.'
+	print 'This is the default setting, you likely do not need to do anything.'
+
+end
